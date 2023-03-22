@@ -8,7 +8,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 //import org.springframework.web.servlet.ModelAndView;
 
 import javax.validation.Valid;
@@ -21,10 +23,15 @@ import javax.validation.Valid;
 public class RecipeController {
 
     private static final String RECIPE_RECIPEFORM_URL = "recipe/recipeform";
+    private WebDataBinder webDataBinder;
     private final RecipeService recipeService;
 
     public RecipeController(RecipeService recipeService) {
         this.recipeService = recipeService;
+    }
+    @InitBinder
+    public void initBinder(WebDataBinder webDataBinder){
+        this.webDataBinder = webDataBinder;
     }
 
     @GetMapping("/recipe/{id}/show")
@@ -49,7 +56,9 @@ public class RecipeController {
     }
 
     @PostMapping("recipe")
-    public String saveOrUpdate(@Valid @ModelAttribute("recipe") RecipeCommand command, BindingResult bindingResult){
+    public Mono<String> saveOrUpdate(@ModelAttribute("recipe") RecipeCommand command){
+        webDataBinder.validate();
+        BindingResult bindingResult = webDataBinder.getBindingResult();
 
         if(bindingResult.hasErrors()){
 
@@ -57,21 +66,16 @@ public class RecipeController {
                 log.debug(objectError.toString());
             });
 
-            return RECIPE_RECIPEFORM_URL;
+            return Mono.just(RECIPE_RECIPEFORM_URL);
         }
-
-        RecipeCommand savedCommand = recipeService.saveRecipeCommand(command).block();
-
-        return "redirect:/recipe/" + savedCommand.getId() + "/show";
+        return recipeService.saveRecipeCommand(command)
+                .map(recipeCommand -> "redirect:/recipe/" + recipeCommand.getId() + "/show");
     }
 
     @GetMapping("recipe/{id}/delete")
-    public String deleteById(@PathVariable String id){
-
+    public Mono<String> deleteById(@PathVariable String id){
         log.debug("Deleting id: " + id);
-
-        recipeService.deleteById(id);
-        return "redirect:/";
+        return recipeService.deleteById(id).thenReturn("redirect:/");
     }
 
 //    @ResponseStatus(HttpStatus.NOT_FOUND)
